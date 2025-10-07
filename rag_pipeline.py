@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = (
-    "Vous êtes un assistant factuel. Répondez en français en vous basant UNIQUEMENT "
-    "sur le CONTEXTE fourni. Préférez une réponse courte et précise, en extrayant les "
-    "termes exacts du document. Citez les sources (chemin et page). Si une notion est "
-    "explicitement nommée (ex: cadre de référence, ITRF, ECEF), donnez le nom exact. "
-    "Si l'information n'est pas dans le contexte, dites que vous ne savez pas."
+    "Vous êtes un assistant factuel. Répondez en français en vous basant "
+    "UNIQUEMENT sur le CONTEXTE fourni. Préférez une réponse courte et "
+    "précise, en extrayant les termes exacts du document. Citez les sources "
+    "(chemin et page). Si une notion est explicitement nommée (ex: cadre de "
+    "référence, ITRF, ECEF), donnez le nom exact. Si l'information n'est pas "
+    "dans le contexte, dites que vous ne savez pas."
 )
 
 
@@ -57,8 +58,13 @@ def retrieve(
     k: int | None = None,
 ) -> List[Document]:
     top_k = k or int(os.getenv("RETRIEVAL_TOP_K", "4"))
-    mmr = os.getenv("RETRIEVAL_MMR", "false").lower() == "true"
+    mmr = os.getenv("RETRIEVAL_MMR", "true").lower() == "true"
     score_threshold = os.getenv("RETRIEVAL_SCORE_THRESHOLD")
+    fetch_k_env = os.getenv("RETRIEVAL_FETCH_K")
+    try:
+        fetch_k = int(fetch_k_env) if fetch_k_env else max(20, top_k * 5)
+    except ValueError:
+        fetch_k = max(20, top_k * 5)
 
     vs = load_faiss_index(faiss_dir)
 
@@ -77,7 +83,7 @@ def retrieve(
     if mmr:
         retriever = vs.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": top_k},
+            search_kwargs={"k": top_k, "fetch_k": fetch_k},
         )
     else:
         if threshold_val is not None:
@@ -99,7 +105,9 @@ def retrieve(
 def _shorten(text: str, max_chars: int = 220) -> str:
     """Return a compact, single-line excerpt limited in length."""
     compact = " ".join(text.split())
-    return compact if len(compact) <= max_chars else compact[: max_chars - 1] + "…"
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 1] + "…"
 
 
 def generate_answer(
@@ -114,10 +122,12 @@ def generate_answer(
     llm = _get_llm()
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=(
-            f"Question: {question}\n\n"
-            f"CONTEXTE:\n{context}"
-        )),
+        HumanMessage(
+            content=(
+                f"Question: {question}\n\n"
+                f"CONTEXTE:\n{context}"
+            )
+        ),
     ]
     result = llm.invoke(messages)
 
@@ -165,3 +175,4 @@ def answer_question(question: str, faiss_dir: str) -> str:
         else:
             lines.append(f"- {src} | page {page} — \"{snippet}\"")
     return "\n".join(lines)
+git

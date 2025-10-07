@@ -69,6 +69,12 @@ def load_documents(paths: Iterable[str]) -> List[Document]:
             meta = dict(d.metadata or {})
             meta.setdefault("source", str(path))
             cleaned = _clean_text(d.page_content)
+            # Heuristique: ignorer les pages de sommaire quasi vides
+            if _looks_like_toc(cleaned):
+                logger.debug(
+                    "Skipping likely table-of-contents page: %s", path
+                )
+                continue
             documents.append(Document(page_content=cleaned, metadata=meta))
 
     logger.info("Loaded %d raw documents", len(documents))
@@ -115,3 +121,18 @@ def _clean_text(text: str) -> str:
     result = "\n".join(line.strip() for line in lines if line is not None)
     # Guard reasonable bounds
     return result.strip()
+
+
+def _looks_like_toc(text: str) -> bool:
+    """Heuristique simple pour ignorer les pages de sommaire/TOC.
+
+    - Très peu de texte utile, beaucoup de points de conduite ("... 12").
+    - Principalement des lignes courtes en majuscules.
+    """
+    compact = " ".join(text.split())
+    if len(compact) < 80:
+        return True
+    dotted = compact.count(".")
+    digits = sum(ch.isdigit() for ch in compact)
+    # Densité de points et de chiffres élevée typique d'un sommaire
+    return dotted > 30 and digits > 10
