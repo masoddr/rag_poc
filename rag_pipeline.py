@@ -175,4 +175,3 @@ def answer_question(question: str, faiss_dir: str) -> str:
         else:
             lines.append(f"- {src} | page {page} — \"{snippet}\"")
     return "\n".join(lines)
-git
