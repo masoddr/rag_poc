@@ -1,0 +1,30 @@
+version: "3.9"
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  api:
+    build: .
+    container_name: rag-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      - FAISS_DIR=/app/.faiss_index
+      - RETRIEVAL_TOP_K=${RETRIEVAL_TOP_K:-4}
+    volumes:
+      - ./.faiss_index:/app/.faiss_index
+      - ./uploads:/app/.uploads
+    depends_on:
+      - ollama
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --workers 1
+
+volumes:
+  ollama-data:
