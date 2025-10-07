@@ -41,7 +41,7 @@ def _format_context(docs: List[Document]) -> str:
 def _get_llm() -> ChatOllama:
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     model = os.getenv("OLLAMA_MODEL", "llama3")
-    temperature = float(os.getenv("OLLAMA_TEMPERATURE", "0.2"))
+    temperature = float(os.getenv("OLLAMA_TEMPERATURE", "0.0"))
     top_p = float(os.getenv("OLLAMA_TOP_P", "0.9"))
     logger.info("Using Ollama model %s at %s", model, base_url)
     return ChatOllama(
@@ -58,13 +58,8 @@ def retrieve(
     k: int | None = None,
 ) -> List[Document]:
     top_k = k or int(os.getenv("RETRIEVAL_TOP_K", "4"))
-    mmr = os.getenv("RETRIEVAL_MMR", "true").lower() == "true"
+    mmr = os.getenv("RETRIEVAL_MMR", "false").lower() == "true"
     score_threshold = os.getenv("RETRIEVAL_SCORE_THRESHOLD")
-    fetch_k_env = os.getenv("RETRIEVAL_FETCH_K")
-    try:
-        fetch_k = int(fetch_k_env) if fetch_k_env else max(20, top_k * 5)
-    except ValueError:
-        fetch_k = max(20, top_k * 5)
 
     vs = load_faiss_index(faiss_dir)
 
@@ -83,7 +78,7 @@ def retrieve(
     if mmr:
         retriever = vs.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": top_k, "fetch_k": fetch_k},
+            search_kwargs={"k": top_k},
         )
     else:
         if threshold_val is not None:
